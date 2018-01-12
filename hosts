@@ -1,0 +1,18 @@
+[galera]
+node1 ansible_host=10.10.10.10 ansible_user=vagrant ansible_ssh_private_key_file=.vagrant/machines/node1/virtualbox/private_key ansible_ssh_extra_args="-o StrictHostKeyChecking=no"
+node2 ansible_host=10.10.10.11 ansible_user=vagrant ansible_ssh_private_key_file=.vagrant/machines/node2/virtualbox/private_key ansible_ssh_extra_args="-o StrictHostKeyChecking=no"
+
+[proxy]
+node3 ansible_host=10.10.10.12 ansible_user=vagrant ansible_ssh_private_key_file=.vagrant/machines/node3/virtualbox/private_key ansible_ssh_extra_args="-o StrictHostKeyChecking=no"
+node4 ansible_host=10.10.10.13 ansible_user=vagrant ansible_ssh_private_key_file=.vagrant/machines/node4/virtualbox/private_key ansible_ssh_extra_args="-o StrictHostKeyChecking=no"
+
+[all:vars]
+repli_user=repli
+repli_pass=demo_password
+dba_user=dba
+dba_pass=demo_password
+sst_user=xtrabackup
+sst_pass=demo_password
+cluster_name=galera_cluster
+maxscale_user=maxscale
+maxscale_pass=demo_password

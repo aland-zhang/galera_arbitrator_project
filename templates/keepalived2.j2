@@ -1,0 +1,23 @@
+global_defs {
+    router_id lb2
+}
+
+vrrp_instance maxscale_pool {
+    state BACKUP
+    interface enp0s8
+    virtual_router_id 50
+    priority 100  
+
+    track_interface {
+    	enp0s8
+    }
+    
+	unicast_src_ip {{ hostvars.node4.ansible_host }}
+    	unicast_peer {
+			{{ hostvars.node3.ansible_host }}
+		}
+
+    notify_master "/etc/keepalived/failover MASTER"
+    notify_backup "/etc/keepalived/failover BACKUP"
+    notify_fault "/etc/keepalived/failover FAULT"
+}

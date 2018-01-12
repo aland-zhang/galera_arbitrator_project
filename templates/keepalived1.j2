@@ -1,0 +1,29 @@
+global_defs {
+	router_id lb1
+}
+
+vrrp_script chk_garb {
+	script "/etc/keepalived/chk_garb"
+	interval 10
+}
+
+vrrp_instance maxscale_pool {
+    state BACKUP
+    interface enp0s8
+    virtual_router_id 50
+    priority 150
+	
+    track_interface {
+    	enp0s8
+    }
+
+	track_script {
+		chk_garb
+    }
+
+	unicast_src_ip {{ hostvars.node3.ansible_host }}
+    	unicast_peer {
+			{{ hostvars.node4.ansible_host }}
+		}
+
+}

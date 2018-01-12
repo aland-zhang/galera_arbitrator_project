@@ -1,0 +1,18 @@
+#!/bin/bash
+
+STATE=$1
+
+case $STATE in
+        "MASTER") systemctl start garb
+                  exit 0
+                  ;;
+        "BACKUP") systemctl stop garb
+                  exit 0
+                  ;;
+        "FAULT")  systemctl stop garb
+                  exit 0
+                  ;;
+        *)        echo "unknown state"
+                  exit 1
+                  ;;
+esac

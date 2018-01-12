@@ -1,0 +1,408 @@
+---
+
+## CLEAN UP PREVIOUS INSTALLS IF NECESSARY
+
+- hosts: 'proxy'
+  become: true
+  become_user: root
+  
+  tasks:
+
+  - name: Checking If Galera Arbitrator (Garbd) Has Been Installed
+    stat: path=/etc/sysconfig/garb
+    register: garb_config 
+
+  - name: Disabling Galera Arbitrator If Exists
+    systemd:
+      name: garb
+      enabled: yes
+      state: stopped
+    when: garb_config.stat.exists == True  
+
+- hosts: 'node2'
+  become: true
+  become_user: root
+  
+  tasks:
+
+  - name: Checking If MySQL Has Been Installed On Node2
+    stat: path=/var/lib/mysql
+    register: mysql_installed 
+  
+  - name: Stopping MySQL Node2
+    service: 
+      name: mysql
+      state: stopped
+    when: mysql_installed.stat.exists == True  
+
+  - name: Cleaning Everything Inside MySQL Data Directory
+    shell: test -d {{ item }} && find {{ item }} -path '{{ item }}/*' -prune -exec rm -rf {} \;
+    with_items: [/var/log/mysql]
+    when: mysql_installed.stat.exists == True
+
+  - name: Cleaning Everything Inside MySQL Log Directory
+    shell: test -d {{ item }} && find {{ item }} -path '{{ item }}/*' -prune -exec rm -rf {} \;
+    with_items: [/var/lib/mysql]
+    when: mysql_installed.stat.exists == True
+
+- hosts: 'node1'
+  become: true
+  become_user: root
+  
+  tasks:
+
+  - name: Checking If MySQL Has Been Installed On Node1
+    stat: path=/var/lib/mysql
+    register: mysql_installed   
+
+  - name: Stopping MySQL Node1
+    service: 
+      name: mysql
+      state: stopped
+    when: mysql_installed.stat.exists == True  
+
+## PREPARE ALL SERVERS FOR PROJECT
+
+- hosts: 'all'
+  become: true
+  become_user: root
+  
+  tasks:
+  
+  - name: Setting 'selinux' Permissive
+    selinux:
+      policy: targeted
+      state: permissive
+ 
+  - name: Removing Any Previous MariaDB Repo
+    file:
+      path: /etc/yum.repos.d/mariadb.repo
+      state: absent
+
+  - name: Getting MariaDB Repos
+    get_url:
+      url: https://downloads.mariadb.com/MariaDB/mariadb_repo_setup
+      dest: /tmp/mariadb_repo_setup
+      
+  - name: Activation MariaDB Repos
+    shell: bash /tmp/mariadb_repo_setup  
+        
+  - name: Installing Additional Packages
+    yum: 
+      name={{ item }}
+      state=present
+    with_items:
+      - epel-release
+      - pigz
+      - socat
+      - telnet
+      - nano
+      - MySQL-python
+      - git   
+
+  - name: Upgrading All Yum Packages
+    yum:
+      name: '*'
+      state: latest
+
+## PROVISION GALERA NODES
+
+- hosts: 'galera'
+  become: true
+  become_user: root
+  
+  tasks:
+
+  - name: Installing MariaDB Items
+    yum:
+      name={{ item }}
+      state=present
+    with_items:
+      - MariaDB-server
+      - MariaDB-client
+      - MariaDB-connect-engine
+      - MariaDB-backup
+      - percona-xtrabackup-24
+
+  - name: Copying Server Template
+    template:
+      src: templates/server.j2
+      dest: /etc/my.cnf.d/server.cnf
+      owner: root
+      group: root
+      mode: 0644   
+
+  - name: Creating MySQL Log Folder
+    file:
+      path: /var/log/mysql
+      state: directory
+      mode: 0755
+      owner: mysql
+      group: mysql
+
+## BOOTSTRAP NODE1
+
+- hosts: 'node1'
+  become: true
+  become_user: root
+  
+  tasks:
+
+  - name: Removing 'grastate.dat' If Necessary
+    file: 
+      path: /var/lib/mysql/grastate.dat
+      state: absent
+
+  - name: Bootstrapping Galera Node1
+    command: galera_new_cluster
+
+  - name: Removing Anonymous MySQL Account
+    mysql_user:
+      name: ''
+      host_all: yes
+      state: absent
+
+  - name: Removing root@{{ ansible_nodename }}
+    mysql_user:
+      name: root
+      host: "{{ ansible_nodename }}"
+      state: absent
+
+  - name: Removeing root@::1
+    mysql_user:
+      name: root
+      host: "::1"
+      state: absent
+
+  - name: Removing Test Database
+    mysql_db:
+      name: test
+      state: absent
+
+  - name: Adding SST User
+    mysql_user:
+      name: "{{ sst_user }}"
+      password: "{{ sst_pass }}"
+      host: "10.%"
+      priv: '*.*:RELOAD,LOCK TABLES,REPLICATION CLIENT,CREATE TABLESPACE,PROCESS,SUPER,CREATE,INSERT,SELECT'
+      state: present 
+
+  - name: Adding SST User
+    mysql_user:
+      name: "{{ sst_user }}"
+      password: "{{ sst_pass }}"
+      host: "localhost"
+      priv: '*.*:RELOAD,LOCK TABLES,REPLICATION CLIENT,CREATE TABLESPACE,PROCESS,SUPER,CREATE,INSERT,SELECT'
+      state: present 
+  
+  - name: Adding DBA User
+    mysql_user:
+      name: "{{ dba_user }}"
+      host: 'localhost'
+      password: "{{ dba_pass }}"
+      update_password: on_create
+      priv: '*.*:ALL,GRANT'
+      state: present  
+
+  - name: Adding DBA User
+    mysql_user:
+      name: "{{ dba_user }}"
+      host: '127.0.0.1'
+      password: "{{ dba_pass }}"
+      update_password: on_create
+      priv: '*.*:ALL,GRANT'
+      state: present  
+
+  - name: Adding DBA User
+    mysql_user:
+      name: "{{ dba_user }}"
+      host: '10.%'
+      password: "{{ dba_pass }}"
+      update_password: on_create
+      priv: '*.*:ALL,GRANT'
+      state: present  
+
+  - name: Adding Replication User
+    mysql_user:
+      name: "{{ repli_user }}"
+      host: '10.%'
+      password: "{{ repli_pass }}"
+      update_password: on_create
+      priv: '*.*:REPLICATION CLIENT,REPLICATION SLAVE'
+      state: present  
+
+  - name: Adding MaxScale User
+    mysql_user:
+      name: "{{ maxscale_user }}"
+      host: '10.%'
+      password: "{{ maxscale_pass }}"
+      update_password: on_create
+      priv: '*.*:REPLICATION CLIENT,REPLICATION SLAVE,SHOW DATABASES/mysql.db:SELECT/mysql.user:SELECT/mysql.tables_priv:SELECT'
+      state: present  
+
+## START GALERA NODE2 AND DO SST
+
+- hosts: 'node2'
+  become: true
+  become_user: root
+   
+  tasks:
+   
+  - name: Starting MySQL Node2
+    service: 
+      name: mysql
+      state: started
+
+## ACTIVATE PLUGINS ON BOTH GALERA NODES IF NECESSARY
+ 
+- hosts: 'galera'
+  become: true
+  become_user: root
+  
+  tasks:
+  
+  - name: Copying Plugins Script
+    copy: 
+      src: sql/plugins.sql
+      dest: /tmp
+     
+  - name: Loading Plugins          
+    mysql_db:
+      state: import
+      name: all
+      target: /tmp/plugins.sql
+
+## LOAD SAMPLE DATA      
+
+- hosts: 'node1'
+  become: true
+  become_user: root
+   
+  tasks:
+  
+  - name: Checking If Sample Data Folder Exists
+    stat: path=/tmp/test_db
+    register: test_db      
+
+  - name: Git Cloning Sample Data If Necessary
+    git:
+      repo: https://github.com/datacharmer/test_db.git
+      dest: /tmp/test_db
+    when: test_db.stat.exists == False  
+
+  - name: Loading Sample Data If Necessary
+    shell: mysql < employees.sql
+    args:
+      chdir: /tmp/test_db
+    when: test_db.stat.exists == False     
+
+## PROVISION MAXSCALE/ARBITRATOR NODES
+
+- hosts: 'proxy'
+  become: true
+  become_user: root
+
+  tasks:
+
+  - name: Installing MaxScale, Etc.
+    yum:
+      name={{ item }}
+      state=present
+    with_items:
+      - MariaDB-client
+      - maxscale
+      - galera
+      - keepalived
+ 
+  - name: Updating maxscale.cnf
+    template:
+      src: templates/maxscale.cnf.j2
+      dest: /etc/maxscale.cnf
+
+  - name: Enabling MaxScale
+    systemd:
+      name: maxscale
+      enabled: True
+      state: restarted
+
+  - name: Creating Empty Garb Log
+    file:
+      path: /var/log/garbd.log
+      state: touch
+      owner: nobody
+      group: nobody
+      mode: 0644
+      
+  - name: Creating Garb Configuration File
+    template:
+      src: templates/garb.j2
+      dest: /etc/sysconfig/garb
+      owner: root
+      group: root
+      mode: 0644
+     
+## ENABLING KEEPALIVED FOR GARB
+
+- hosts: 'node3'
+  become: true
+  become_user: root
+
+  tasks:
+ 
+  - name: Creating keepalived.conf
+    template:
+      src: templates/keepalived1.j2
+      dest: /etc/keepalived/keepalived.conf
+ 
+  - name: Copying chk_garb
+    template:
+      src: templates/chk_garb
+      dest: /etc/keepalived/chk_garb
+      mode: 0755
+     
+  - name: Enabling MaxScale On Active Node
+    systemd:
+      name: maxscale
+      enabled: true
+      state: started
+      
+  - name: Enable Keepalived On Active Node
+    systemd:
+      name: keepalived
+      enabled: True
+      state: restarted
+
+  - name: Enabling Galera Arbitrator
+    systemd:
+      name: garb
+      enabled: yes
+      state: started
+
+- hosts: 'node4'
+  become: true
+  become_user: root
+
+  tasks:
+  
+  - name: Creating keepalived.conf
+    template:
+      src: templates/keepalived2.j2
+      dest: /etc/keepalived/keepalived.conf
+
+  - name: Copying Keepalived Failover Script
+    template:
+      src: templates/failover
+      dest: /etc/keepalived/failover
+      mode: 0755
+      
+  - name: Enable Keepalived On Passive Node
+    systemd:
+      name: keepalived
+      enabled: True
+      state: restarted
+      
+  - name: Enabling Galera Arbitrator
+    systemd:
+      name: garb
+      enabled: yes
+      state: stopped                           

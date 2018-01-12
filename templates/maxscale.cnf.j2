@@ -1,0 +1,72 @@
+### Ansible Managed - {{lookup('pipe','date +%m/%d/%Y_%I:%M:%S_%p')}} - Do Not Edit!
+
+[MaxScale]
+threads=4
+auth_connect_timeout=20
+auth_read_timeout=20
+auth_write_timeout=20
+
+[Galera Monitor]
+type=monitor
+module=galeramon
+use_priority=true
+available_when_donor=false
+disable_master_failback=false
+servers=galera1,galera2
+user={{ maxscale_user }}
+passwd={{ maxscale_pass }}
+monitor_interval=200
+
+[Splitter Service]
+type=service
+router=readwritesplit
+servers=galera1,galera2
+user={{ maxscale_user }}
+passwd={{ maxscale_pass }}
+
+[MaxAdmin Service]
+type=service
+router=cli
+
+[MaxInfo]
+type=service
+router=maxinfo
+user={{ maxscale_user }}
+passwd={{ maxscale_pass }} 
+
+[Splitter Listener]
+type=listener
+service=Splitter Service
+protocol=MySQLClient
+port=3306
+
+[MaxAdmin Unix Listener]
+type=listener
+service=MaxAdmin Service
+protocol=maxscaled
+socket=default
+
+[MaxAdmin Inet Listener]
+type=listener
+service=MaxAdmin Service
+protocol=maxscaled
+address=127.0.0.1
+port=6603
+
+[MaxInfo Listener]
+type=listener
+service=MaxInfo
+protocol=MySQLClient
+port=9003
+
+[galera1]
+type=server
+address={{ hostvars.node1.ansible_host }}
+port=3306
+protocol=MySQLBackend
+
+[galera2]
+type=server
+address={{ hostvars.node2.ansible_host }}
+port=3306
+protocol=MySQLBackend
