@@ -3,9 +3,6 @@
 
 In this experiment I am going to test the stability of using a two node Galera cluster and an arbitrator to create a quorum. The hope is that we can reduce the overall cost of a typical HA Galera cluster by 20%.
 
-* Demo User: **dba**
-* Demo Pass: **demo_password**
-
 #### Prerequisites
 
 * [Git](https://git-scm.com/download/)
@@ -34,6 +31,9 @@ In this experiment I am going to test the stability of using a two node Galera c
 #### Verify Cluster Size (2 Galera & 1 Arbitrator)
 
 `MariaDB [(none)]> SHOW STATUS LIKE 'wsrep_cluster_size';`
+
+* Demo User: **dba**
+* Demo Pass: **demo_password**
 
 #### Test Arbitrator Failover
 
