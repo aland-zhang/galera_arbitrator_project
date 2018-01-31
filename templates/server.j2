@@ -102,7 +102,7 @@ innodb_log_file_size            	= 1G
 innodb_autoinc_lock_mode        	= 2
 innodb_rollback_on_timeout      	= ON
 innodb_stats_on_metadata        	= 0
-innodb_thread_concurrency       	= {{ (ansible_processor_count * 2) }}
+innodb_thread_concurrency       	= {{ (ansible_processor_vcpus * 2) }}
 #innodb_force_primary_key        	= 1
 
 ################################################################
@@ -172,7 +172,7 @@ wsrep_cluster_address           	= gcomm://{{ hostvars.node1.ansible_host }},{{ 
 wsrep_provider                  	= /usr/lib64/galera/libgalera_smm.so
 #wsrep_provider_options          	= "gcs.fc_limit=32;gcache.size=2G;"
 wsrep_provider_options          	= "gcache.size=2G;evs.keepalive_period=PT3S;evs.suspect_timeout=PT30S;evs.inactive_timeout=PT1M;evs.install_timeout=PT1M;evs.send_window=1024;evs.user_send_window=512;evs.join_retrans_period=PT0.5S;"
-wsrep_slave_threads             	= {{ ansible_processor_count }}
+wsrep_slave_threads             	= {{ ansible_processor_vcpus }}
 wsrep_cluster_name              	= {{ cluster_name }}
 wsrep_node_name                 	= {{ ansible_nodename }}
 wsrep_node_address              	= {{ ansible_host }}
